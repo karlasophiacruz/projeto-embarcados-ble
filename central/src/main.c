@@ -3,9 +3,9 @@
 #include <stddef.h>
 #include <string.h>
 #include <sys/printk.h>
-#include <version.h>
 #include <zephyr.h>
 #include <kernel.h>
+#include <version.h>
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/conn.h>
 #include <bluetooth/gatt.h>
