@@ -130,12 +130,6 @@ struct bt_conn_cb conn_cb = {
     .disconnected = disconnected,
 };
 
-/** @brief Bluetooth connection callback object (alternative definition) */
-BT_CONN_CB_DEFINE(conn_callbacks) = {
-    .connected    = connected,
-    .disconnected = disconnected,
-};
-
 /** @brief Thread object to handle user input */
 K_THREAD_DEFINE(input, 1024, input_task, NULL, NULL, NULL, 1, 0, 1000);
 
@@ -338,7 +332,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
     bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
     if (err) {
-        printk("Fail: Couldn't connect. Error: %d %s (%u)\n", addr, err);
+        printk("Fail: Couldn't connect. Error: %s(%u)\n", addr, err);
 
         bt_conn_unref(default_conn);
         default_conn = NULL;
@@ -406,7 +400,7 @@ static void input_task(void)
 
         if (default_conn == NULL) {
             printk("No device connected. Try again.");
-            return -1;
+            return;
         }
 
         err = bt_gatt_write_without_response(default_conn, uart_write, recvd_line,
