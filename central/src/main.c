@@ -1,5 +1,6 @@
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/conn.h>
+#include <bluetooth/gap.h>
 #include <bluetooth/gatt.h>
 #include <bluetooth/hci.h>
 #include <bluetooth/uuid.h>
@@ -16,12 +17,15 @@
 
 #include "central.h"
 
+
 /**
-* @brief Callback function for when the MTU (Maximum Transmission Unit) is updated.
-* @param conn The Bluetooth connection.
-* @param tx The maximum number of bytes that the local device can transmit in a single packet.
-* @param rx The maximum number of bytes that the remote device can transmit in a single packet.
-*/
+ * @brief Callback function for when the MTU (Maximum Transmission Unit) is updated.
+ * @param conn The Bluetooth connection.
+ * @param tx The maximum number of bytes that the local device can transmit in a single
+ * packet.
+ * @param rx The maximum number of bytes that the remote device can transmit in a single
+ * packet.
+ */
 void mtu_updated(struct bt_conn *conn, uint16_t tx, uint16_t rx);
 
 /**
@@ -35,19 +39,21 @@ void mtu_updated(struct bt_conn *conn, uint16_t tx, uint16_t rx);
 static bool svc_found(struct bt_data *data, void *user_data);
 
 /**
-* @brief Callback function for handling BLE device found events.
-* @param addr [in] Pointer to the Bluetooth LE address of the device found.
-* @param rssi [in] RSSI value of the advertising packet from the device.
-* @param type [in] Type of advertising event.
-* @param ad [in] Pointer to the advertising data of the device.
-*/
+ * @brief Callback function for handling BLE device found events.
+ * @param addr [in] Pointer to the Bluetooth LE address of the device found.
+ * @param rssi [in] RSSI value of the advertising packet from the device.
+ * @param type [in] Type of advertising event.
+ * @param ad [in] Pointer to the advertising data of the device.
+ */
 static void device_found(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
                          struct net_buf_simple *ad);
 
 /**
-* @brief Starts a BLE scan with the specified scan parameters and callback function for discovered devices.
-* @param err A pointer to an integer that will contain any errors encountered during scanning.
-*/
+ * @brief Starts a BLE scan with the specified scan parameters and callback function for
+ * discovered devices.
+ * @param err A pointer to an integer that will contain any errors encountered during
+ * scanning.
+ */
 static void start_scan(int err);
 
 /**
@@ -59,33 +65,35 @@ static void start_scan(int err);
 * @param length Length of the received data.
 * @return BT_GATT_ITER_CONTINUE.
 */
-static uint8_t notify(struct bt_conn *conn, struct bt_gatt_subscribe_params *params,
+static uint8_t central_notify(struct bt_conn *conn, struct bt_gatt_subscribe_params *params,
                       const void *buf, uint16_t length);
 
 
 /**
-
-@brief Callback function to discover Bluetooth characteristics.
-* @param[in] conn - pointer to the Bluetooth connection.
-* @param[in] attr - pointer to the Bluetooth GATT attribute.
-* @param[in] params - pointer to the discover parameters for the GATT client.
-* @return BT_GATT_ITER_STOP when the discovery is complete, otherwise BT_GATT_ITER_CONTINUE.
-* */
+ * @brief Callback function to discover Bluetooth characteristics.
+ * @param[in] conn - pointer to the Bluetooth connection.
+ * @param[in] attr - pointer to the Bluetooth GATT attribute.
+ * @param[in] params - pointer to the discover parameters for the GATT client.
+ * @return BT_GATT_ITER_STOP when the discovery is complete, otherwise
+ * BT_GATT_ITER_CONTINUE.
+ * */
 static uint8_t discover_characteristics(struct bt_conn *conn,
                                         const struct bt_gatt_attr *attr,
                                         struct bt_gatt_discover_params *params);
 
 /**
 
-* @brief Callback function called when a Bluetooth Low Energy (BLE) connection is established or fails to connect.
+* @brief Callback function called when a Bluetooth Low Energy (BLE) connection is
+established or fails to connect.
 * @param conn Pointer to the Bluetooth Low Energy connection object.
-* @param err The error code received from the connection attempt. A value of 0 indicates successful connection, while 
-any other value indicates an error.
+* @param err The error code received from the connection attempt. A value of 0 indicates
+successful connection, while any other value indicates an error.
 * @return void
 */
 static void connected(struct bt_conn *conn, uint8_t err);
 /**
-* @brief Callback function to handle a disconnection event from a Bluetooth Low Energy (BLE) device.
+* @brief Callback function to handle a disconnection event from a Bluetooth Low Energy
+(BLE) device.
 
 * @param conn The connection object.
 
@@ -96,9 +104,9 @@ static void connected(struct bt_conn *conn, uint8_t err);
 static void disconnected(struct bt_conn *conn, uint8_t reason);
 
 /**
-* @brief Task to handle user input and send it to the BLE central device via GATT.
-* @return void.
-*/
+ * @brief Task to handle user input and send it to the BLE central device via GATT.
+ * @return void.
+ */
 static void input_task(void);
 
 /**
@@ -112,7 +120,7 @@ int main(void);
 static struct bt_conn *default_conn = NULL;
 
 /** @brief Bluetooth GATT callback object */
-static struct bt_gatt_cb gatt_cb    = {
+static struct bt_gatt_cb gatt_cb = {
     .att_mtu_updated = mtu_updated,
 };
 
@@ -135,13 +143,13 @@ K_THREAD_DEFINE(input, 1024, input_task, NULL, NULL, NULL, 1, 0, 1000);
 static struct bt_gatt_discover_params discover_params = {0};
 
 /** @brief Bluetooth UUID object for UART service */
-static struct bt_uuid_16 uuid_t                       = BT_UUID_INIT_16(0);
+static struct bt_uuid_16 uuid_t = BT_UUID_INIT_16(0);
 
 /** @brief Bluetooth GATT subscribe parameters */
-struct bt_gatt_subscribe_params subscribe_params      = {0};
+static struct bt_gatt_subscribe_params subscribe_params = {0};
 
 /** @brief Write buffer for UART service */
-uint16_t uart_write                                   = 0;
+static uint16_t uart_write = 0;
 
 void mtu_updated(struct bt_conn *conn, uint16_t tx, uint16_t rx)
 {
@@ -200,10 +208,8 @@ static void device_found(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
                          struct net_buf_simple *ad)
 {
     char addr_str[BT_ADDR_LE_STR_LEN];
+    bt_addr_le_to_str(addr, addr_str, sizeof(addr_str));
 
-    if (default_conn) {
-        return;
-    }
 
     if (type != BT_GAP_ADV_TYPE_ADV_IND && type != BT_GAP_ADV_TYPE_ADV_DIRECT_IND) {
         return;
@@ -227,7 +233,7 @@ static void start_scan(int err)
         .interval = BT_GAP_SCAN_FAST_INTERVAL,
         .window   = BT_GAP_SCAN_FAST_WINDOW,
     };
-    /* This demo doesn't require active scan */
+
     err = bt_le_scan_start(&scan_param, device_found);
     if (err) {
         printk("Fail: Start Scan. Error: %d\n", err);
@@ -237,7 +243,7 @@ static void start_scan(int err)
     printk("Success: Scanning started\n");
 }
 
-static uint8_t notify(struct bt_conn *conn, struct bt_gatt_subscribe_params *params,
+static uint8_t central_notify(struct bt_conn *conn, struct bt_gatt_subscribe_params *params,
                       const void *buf, uint16_t length)
 {
     if (!buf) {
@@ -308,7 +314,7 @@ static uint8_t discover_characteristics(struct bt_conn *conn,
             printk("Fail. Error: %d.\n", err);
         }
     } else {
-        subscribe_params.notify     = notify;
+        subscribe_params.notify     = central_notify;
         subscribe_params.value      = BT_GATT_CCC_NOTIFY;
         subscribe_params.ccc_handle = attr->handle;
 
@@ -341,7 +347,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
         return;
     }
 
-
+    printk("Connected: %s\n", addr);
     if (conn == default_conn) {
         printk("Success: Connected. %s\n", addr);
         memcpy(&uuid_t, BT_UART_SVC_UUID, sizeof(uuid_t));
@@ -429,6 +435,5 @@ int main(void)
     printk("Hello! I'm using Zephyr %s on %s, a %s board. \n\n", KERNEL_VERSION_STRING,
            CONFIG_BOARD, CONFIG_ARCH);
 
-    console_getline_init();
     return 0;
 }
