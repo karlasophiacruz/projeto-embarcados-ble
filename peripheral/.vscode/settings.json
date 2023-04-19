@@ -1,5 +1,7 @@
 {
     "files.associations": {
-        "zephyr.h": "c"
+        "zephyr.h": "c",
+        "byteorder.h": "c",
+        "peripheral.h": "c"
     }
 }

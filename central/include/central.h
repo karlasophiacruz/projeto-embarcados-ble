@@ -50,7 +50,7 @@
  * @param conn The Bluetooth connection.
  * @param tx The maximum number of bytes that the local device can transmit in a single
  * packet.
- * @param rx The maximum number of bytes that the remote device can transmit in a single
+ * @param rx The maximum number of bytes that the local device can receive in a single
  * packet.
  */
 void mtu_updated(struct bt_conn *conn, uint16_t tx, uint16_t rx);
@@ -62,7 +62,7 @@ void mtu_updated(struct bt_conn *conn, uint16_t tx, uint16_t rx);
 * @return true if the service is not of interest or if the service data is invalid.
 * @return false if the service is of interest and the connection attempt was initiated.
 */
-static bool svc_found(struct bt_data *data, void *user_data);
+static bool found_service_handler(struct bt_data *data, void *user_data);
 
 /**
  * @brief Callback function for handling BLE device found events.
@@ -71,8 +71,8 @@ static bool svc_found(struct bt_data *data, void *user_data);
  * @param type [in] Type of advertising event.
  * @param ad [in] Pointer to the advertising data of the device.
  */
-static void device_found(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
-                         struct net_buf_simple *ad);
+static void found_device_handler(const bt_addr_le_t *device_address, int8_t rssi,
+                                 uint8_t type, struct net_buf_simple *advertising_data);
 
 /**
  * @brief Starts a BLE scan with the specified scan parameters and callback function for
@@ -80,7 +80,7 @@ static void device_found(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
  * @param err A pointer to an integer that will contain any errors encountered during
  * scanning.
  */
-static void start_scan(int err);
+static void scanBluetoothDevices(int err);
 
 /**
 * @brief Callback function to handle BLE GATT notifications.
@@ -90,7 +90,7 @@ static void start_scan(int err);
 * @param length Length of the received data.
 * @return BT_GATT_ITER_CONTINUE.
 */
-static uint8_t central_notify(struct bt_conn *conn, struct bt_gatt_subscribe_params *params,
+static uint8_t central_notification_handler(struct bt_conn *conn, struct bt_gatt_subscribe_params *params,
                       const void *buf, uint16_t length);
 
 /**
@@ -113,7 +113,7 @@ established or fails to connect.
 successful connection, while any other value indicates an error.
 * @return void
 */
-static void connected(struct bt_conn *conn, uint8_t err);
+static void connected(struct bt_conn *connection, uint8_t error);
 
 /**
 * @brief Callback function to handle a disconnection event from a Bluetooth Low Energy
