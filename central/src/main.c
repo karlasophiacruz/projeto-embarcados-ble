@@ -17,19 +17,25 @@
 #include "central.h"
 
 
-static void start_scan(void);
-void ble_central_mtu_updated(struct bt_conn *conn, uint16_t tx, uint16_t rx);
+static void start_scan(int err);
+void mtu_updated(struct bt_conn *conn, uint16_t tx, uint16_t rx);
+static void connected(struct bt_conn *conn, uint8_t err);
+static void disconnected(struct bt_conn *conn, uint8_t reason);
 
-static struct bt_conn *default_conn;
-static struct bt_gatt_cb gatt_cb = {
+static struct bt_conn *default_conn = NULL;
+static struct bt_gatt_cb gatt_cb    = {
     .att_mtu_updated = mtu_updated,
 };
 
+struct bt_conn_cb conn_cb = {
+    .connected    = connected,
+    .disconnected = disconnected,
+};
 
-static struct bt_gatt_discover_params discover_params;
-static struct bt_uuid_16 uuid;
-struct bt_gatt_subscribe_params subscribe_params;
-uint16_t uart_write;
+static struct bt_gatt_discover_params discover_params = {0};
+static struct bt_uuid_16 uuid_t                       = BT_UUID_INIT_16(0);
+struct bt_gatt_subscribe_params subscribe_params      = {0};
+uint16_t uart_write                                   = 0;
 
 void mtu_updated(struct bt_conn *conn, uint16_t tx, uint16_t rx)
 {
@@ -81,7 +87,7 @@ static bool svc_found(struct bt_data *data, void *user_data)
                 bt_conn_le_create(addr, BT_CONN_LE_CREATE_CONN, bt_param, &default_conn);
             if (err) {
                 printk("Create conn failed (err %d).\n", err);
-                start_scan();
+                start_scan(0);
             }
 
             return false;
@@ -95,7 +101,6 @@ static void device_found(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
                          struct net_buf_simple *ad)
 {
     char addr_str[BT_ADDR_LE_STR_LEN];
-    int err;
 
     if (default_conn) {
         return;
@@ -114,19 +119,19 @@ static void device_found(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
         return;
     }
 
-    if (bt_le_scan_stop()) {
-        return;
-    }
-
     bt_data_parse(ad, svc_found, (void *) addr);
 }
 
-static void start_scan(void)
+static void start_scan(int err)
 {
-    int err;
-
+    struct bt_le_scan_param scan_param = {
+        .type     = BT_LE_SCAN_TYPE_ACTIVE,
+        .options  = BT_LE_SCAN_OPT_NONE,
+        .interval = BT_GAP_SCAN_FAST_INTERVAL,
+        .window   = BT_GAP_SCAN_FAST_WINDOW,
+    };
     /* This demo doesn't require active scan */
-    err = bt_le_scan_start(BT_LE_SCAN_PASSIVE, device_found);
+    err = bt_le_scan_start(&scan_param, device_found);
     if (err) {
         printk("Scanning failed to start (err %d)\n", err);
         return;
@@ -170,8 +175,8 @@ static uint8_t discover_characteristics(struct bt_conn *conn,
 
     /* Características do Serviço Bluetooth UART. */
     if (!bt_uuid_cmp(discover_params.uuid, BT_UART_SVC_UUID)) {
-        memcpy(&uuid, BT_UART_NOTIFY_CHAR_UUID, sizeof(uuid));
-        discover_params.uuid         = &uuid.uuid;
+        memcpy(&uuid_t, BT_UART_NOTIFY_CHAR_UUID, sizeof(uuid_t));
+        discover_params.uuid         = &uuid_t.uuid;
         discover_params.start_handle = attr->handle + 1;
         discover_params.type         = BT_GATT_DISCOVER_CHARACTERISTIC;
 
@@ -181,26 +186,26 @@ static uint8_t discover_characteristics(struct bt_conn *conn,
             printk("Discover failed (err %d).\n", err);
         }
     } else if (!bt_uuid_cmp(discover_params.uuid, BT_UART_NOTIFY_CHAR_UUID)) {
-        memcpy(&uuid, BT_UART_WRITE_CHAR_UUID, sizeof(uuid));
-        discover_params.uuid         = &uuid.uuid;
-        discover_params.start_handle = attr->handle + 1;
-        discover_params.type         = BT_GATT_DISCOVER_CHARACTERISTIC;
+        memcpy(&uuid_t, BT_UART_WRITE_CHAR_UUID, sizeof(uuid_t));
+        discover_params.uuid          = &uuid_t.uuid;
+        discover_params.start_handle  = attr->handle + 1;
+        discover_params.type          = BT_GATT_DISCOVER_CHARACTERISTIC;
+        subscribe_params.value_handle = bt_gatt_attr_value_handle(attr);
 
         /* Característica de escrita. */
         err = bt_gatt_discover(conn, &discover_params);
 
-        subscribe_params.value_handle = bt_gatt_attr_value_handle(attr);
         if (err) {
             printk("Discover failed (err %d).\n", err);
         }
     } else if (!bt_uuid_cmp(discover_params.uuid, BT_UART_WRITE_CHAR_UUID)) {
-        memcpy(&uuid, BT_UUID_GATT_CCC, sizeof(uuid));
-        discover_params.uuid         = &uuid.uuid;
+        memcpy(&uuid_t, BT_UUID_GATT_CCC, sizeof(uuid_t));
+        discover_params.uuid         = &uuid_t.uuid;
         discover_params.start_handle = attr->handle + 1;
         discover_params.type         = BT_GATT_DISCOVER_DESCRIPTOR;
         uart_write                   = bt_gatt_attr_value_handle(attr);
 
-        /* Descritor da . */
+        /* Descritor do serviço . */
         err = bt_gatt_discover(conn, &discover_params);
         if (err) {
             printk("Discover failed (err %d).\n", err);
@@ -223,37 +228,6 @@ static uint8_t discover_characteristics(struct bt_conn *conn,
     return BT_GATT_ITER_STOP;
 }
 
-static int ble_peripheral_write_uart(struct bt_conn *conn,
-                                     const struct bt_gatt_attr *attr,
-                                     const void *buf, uint16_t len,
-                                     uint16_t offset, uint8_t flags) {
-  int err = 0;
-  char data[len + 1];
-
-  /* Copia dados recebidos. */
-  memcpy(data, buf, len);
-  data[len] = '\0';
-
-  printk("Received data %s.\n", data);
-
-  /* Converte letras minúsculas para maiúsculas. */
-  for (int i = 0; i < len; i++) {
-    if ((data[i] >= 'a') && ((data[i] <= 'z'))) {
-      data[i] = 'A' + (data[i] - 'a');
-    }
-  }
-
-  printk("Sending data %s.\n", data);
-
-  /* Notifica Central com o dados convertidos. */
-  err = bt_gatt_notify(NULL, &ble_uart_svc.attrs[1], data, len);
-  if (err) {
-    printk("|BLE PERIPHERAL| Error notifying.\n");
-  }
-
-  return 0;
-}
-
 static void connected(struct bt_conn *conn, uint8_t err)
 {
     char addr[BT_ADDR_LE_STR_LEN];
@@ -266,21 +240,15 @@ static void connected(struct bt_conn *conn, uint8_t err)
         bt_conn_unref(default_conn);
         default_conn = NULL;
 
-        start_scan();
+        start_scan(0);
         return;
     }
 
-    if (conn != default_conn) {
-        return;
-    }
 
-    printk("Connected: %s\n", addr);
-    printk("Enter al line finishing with Enter:\n");
-
-    /* Inicializa identificação das características do dispositivos pareado. */
     if (conn == default_conn) {
-        memcpy(&uuid, BT_UART_SVC_UUID, sizeof(uuid));
-        discover_params.uuid = &uuid.uuid;
+        printk("Connected: %s\n", addr);
+        memcpy(&uuid_t, BT_UART_SVC_UUID, sizeof(uuid_t));
+        discover_params.uuid = &uuid_t.uuid;
         /* Serviços -> Características */
         discover_params.func         = discover_characteristics;
         discover_params.start_handle = 0x0001;
@@ -291,25 +259,6 @@ static void connected(struct bt_conn *conn, uint8_t err)
         if (err) {
             printk("Discover failed(err %d).\n", err);
             return;
-        }
-    }
-
-    while (1) {
-        k_sleep(K_MSEC(100));
-        printk(">");
-        char *s = console_getline();
-
-        if (s == NULL) {
-            printk("Error receiving line!\n");
-            continue;
-        }
-        printk("Typed line: %s\n", s);
-        printk("Last char was: 0x%x\n", s[strlen(s) - 1]);
-
-        err = bt_gatt_write_without_response(default_conn, uart_write, s, strlen(s),
-                                             false);
-        if (err) {
-            printk("%s: Write cmd failed (%d).\n", __func__, err);
         }
     }
 }
@@ -329,21 +278,56 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
     bt_conn_unref(default_conn);
     default_conn = NULL;
 
-    start_scan();
+    start_scan(0);
 }
 
 BT_CONN_CB_DEFINE(conn_callbacks) = {
     .connected    = connected,
     .disconnected = disconnected,
 };
+static void input_task(void);
 
+K_THREAD_DEFINE(input, 1024, input_task, NULL, NULL, NULL, 1, 0, 1000);
+
+static void input_task(void)
+{
+    int err          = 0;
+    char *recvd_line = NULL;
+
+    console_getline_init();
+
+    while (true) {
+        k_sleep(K_MSEC(200));
+
+        printk("|BLE CENTRAL| Enter a line:");
+        recvd_line = console_getline();
+
+        if (recvd_line == NULL) {
+            printk("|BLE CENTRAL| Error receiving line!\n");
+            continue;
+        }
+
+        printk("|BLE CENTRAL| Sending line:%s\n", recvd_line);
+
+        if (default_conn == NULL) {
+            printk("Not connected!");
+            return -1;
+        }
+
+        err = bt_gatt_write_without_response(default_conn, uart_write, recvd_line,
+                                             strlen(recvd_line), false);
+        if (err) {
+            printk("Write failed (err %d)\n", err);
+        }
+    }
+}
 int main(void)
 {
     int err;
 
-
+    bt_conn_cb_register(&conn_cb);
     bt_gatt_cb_register(&gatt_cb);
-    err = bt_enable(NULL);
+    err = bt_enable(start_scan);
     if (err) {
         printk("Bluetooth init failed (err %d)\n", err);
         return 0;
@@ -351,7 +335,7 @@ int main(void)
 
     printk("Bluetooth initialized\n");
 
-    start_scan();
+
     printk("Hello! I'm using Zephyr %s on %s, a %s board. \n\n", KERNEL_VERSION_STRING,
            CONFIG_BOARD, CONFIG_ARCH);
 
@@ -366,4 +350,5 @@ int main(void)
 // renode -e "include @scripts/single-node/nrf52840.resc;
 // emulation CreateServerSocketTerminal 1234 'externalUART';
 // connector Connect sysbus.uart0 externalUART;
-// sysbus LoadELF @C:\Users\Pedro\Repos\projeto-embarcados-ble\central\.pio\build\nrf52840_dk\firmware.elf;start"
+// sysbus LoadELF
+// @C:\Users\Pedro\Repos\projeto-embarcados-ble\central\.pio\build\nrf52840_dk\firmware.elf;start"

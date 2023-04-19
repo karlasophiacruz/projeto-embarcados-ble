@@ -19,10 +19,20 @@ void mtu_updated(struct bt_conn *conn, uint16_t tx, uint16_t rx);
 static void change_notify(const struct bt_gatt_attr *attr, uint16_t value);
 static int write_uart(struct bt_conn *conn, const struct bt_gatt_attr *attr,
                       const void *buf, uint16_t len, uint16_t offset, uint8_t flags);
-struct bt_conn *default_conn;
+static void connected(struct bt_conn *conn, uint8_t err);
+static void disconnected(struct bt_conn *conn, uint8_t reason);
+
+
+struct bt_conn *default_conn = NULL;
 static struct bt_gatt_cb gatt_cb = {
     .att_mtu_updated = mtu_updated,
 };
+
+struct bt_conn_cb conn_cb= {
+    .connected = connected,
+    .disconnected = disconnected,
+};
+
 static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
     BT_DATA_BYTES(BT_DATA_UUID16_ALL, BT_UUID_16_ENCODE(BT_UART_UUID_SVC_VAL), ),
@@ -83,6 +93,10 @@ void mtu_updated(struct bt_conn *conn, uint16_t tx, uint16_t rx)
 
 static void connected(struct bt_conn *conn, uint8_t err)
 {
+    if(conn == default_conn){
+        return;
+    }
+    
     if (err) {
         printk("Peripheral Connection failed (err %u).\n", err);
     } else {
@@ -118,6 +132,7 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
 void main(void)
 {
     int err;
+    bt_conn_cb_register(&conn_cb);
     bt_gatt_cb_register(&gatt_cb);
     err = bt_enable(NULL);
     if (err) {
@@ -134,5 +149,5 @@ void main(void)
     }
 
     printk("Started advertising.\n");
-    return 0;
+    return;
 }
