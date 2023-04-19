@@ -342,6 +342,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
     }
 
     printk("Connected: %s\n", addr);
+    
     if (conn == default_conn) {
         printk("Success: Connected. %s\n", addr);
         memcpy(&uuid_t, BT_UART_SVC_UUID, sizeof(uuid_t));
