@@ -22,7 +22,7 @@ void ble_central_mtu_updated(struct bt_conn *conn, uint16_t tx, uint16_t rx);
 
 static struct bt_conn *default_conn;
 static struct bt_gatt_cb gatt_cb = {
-    .att_mtu_updated = ble_central_mtu_updated,
+    .att_mtu_updated = mtu_updated,
 };
 
 
@@ -31,7 +31,7 @@ static struct bt_uuid_16 uuid;
 struct bt_gatt_subscribe_params subscribe_params;
 uint16_t uart_write;
 
-void ble_central_mtu_updated(struct bt_conn *conn, uint16_t tx, uint16_t rx)
+void mtu_updated(struct bt_conn *conn, uint16_t tx, uint16_t rx)
 {
     printk("|BLE CENTRAL| Updated MTU. TX:%d RX:%d bytes.\n", tx, rx);
 }
@@ -223,6 +223,36 @@ static uint8_t discover_characteristics(struct bt_conn *conn,
     return BT_GATT_ITER_STOP;
 }
 
+static int ble_peripheral_write_uart(struct bt_conn *conn,
+                                     const struct bt_gatt_attr *attr,
+                                     const void *buf, uint16_t len,
+                                     uint16_t offset, uint8_t flags) {
+  int err = 0;
+  char data[len + 1];
+
+  /* Copia dados recebidos. */
+  memcpy(data, buf, len);
+  data[len] = '\0';
+
+  printk("Received data %s.\n", data);
+
+  /* Converte letras minúsculas para maiúsculas. */
+  for (int i = 0; i < len; i++) {
+    if ((data[i] >= 'a') && ((data[i] <= 'z'))) {
+      data[i] = 'A' + (data[i] - 'a');
+    }
+  }
+
+  printk("Sending data %s.\n", data);
+
+  /* Notifica Central com o dados convertidos. */
+  err = bt_gatt_notify(NULL, &ble_uart_svc.attrs[1], data, len);
+  if (err) {
+    printk("|BLE PERIPHERAL| Error notifying.\n");
+  }
+
+  return 0;
+}
 
 static void connected(struct bt_conn *conn, uint8_t err)
 {
