@@ -130,12 +130,6 @@ struct bt_conn_cb conn_cb = {
     .disconnected = disconnected,
 };
 
-/** @brief Bluetooth connection callback object (alternative definition) */
-BT_CONN_CB_DEFINE(conn_callbacks) = {
-    .connected    = connected,
-    .disconnected = disconnected,
-};
-
 /** @brief Thread object to handle user input */
 K_THREAD_DEFINE(input, 1024, input_task, NULL, NULL, NULL, 1, 0, 1000);
 
@@ -344,6 +338,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
     }
 
     printk("Connected: %s\n", addr);
+    
     if (conn == default_conn) {
         memcpy(&uuid_t, BT_UART_SVC_UUID, sizeof(uuid_t));
         discover_params.uuid = &uuid_t.uuid;
