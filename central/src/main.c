@@ -16,10 +16,6 @@
 
 #include "central.h"
 
-static void start_scan(int err);
-void mtu_updated(struct bt_conn *conn, uint16_t tx, uint16_t rx);
-static void connected(struct bt_conn *conn, uint8_t err);
-static void disconnected(struct bt_conn *conn, uint8_t reason);
 /**
 * @brief Callback function for when the MTU (Maximum Transmission Unit) is updated.
 * @param conn The Bluetooth connection.
@@ -149,7 +145,7 @@ uint16_t uart_write                                   = 0;
 
 void mtu_updated(struct bt_conn *conn, uint16_t tx, uint16_t rx)
 {
-    printk("|BLE CENTRAL| Updated MTU. TX:%d RX:%d bytes.\n", tx, rx);
+    printk("MTU was updated. TX:%d RX:%d bytes.\n", tx, rx);
 }
 
 static bool svc_found(struct bt_data *data, void *user_data)
@@ -157,13 +153,13 @@ static bool svc_found(struct bt_data *data, void *user_data)
     bt_addr_le_t *addr = user_data;
     int i;
 
-    printk("D: %u data_len %u.\n", data->type, data->data_len);
+    printk("D: %u L: %u.\n", data->type, data->data_len);
 
     switch (data->type) {
     case BT_DATA_UUID16_SOME:
     case BT_DATA_UUID16_ALL:
         if (data->data_len % sizeof(uint16_t) != 0U) {
-            printk("AD error.\n");
+            printk("Advertisement error.\n");
             return true;
         }
 
@@ -181,7 +177,7 @@ static bool svc_found(struct bt_data *data, void *user_data)
 
             err = bt_le_scan_stop();
             if (err) {
-                printk("Stop LE scan failed (err %d).\n", err);
+                printk("Fail: Scan couldn't stop. Error: %d.\n", err);
                 continue;
             }
 
@@ -189,7 +185,7 @@ static bool svc_found(struct bt_data *data, void *user_data)
             err =
                 bt_conn_le_create(addr, BT_CONN_LE_CREATE_CONN, bt_param, &default_conn);
             if (err) {
-                printk("Create conn failed (err %d).\n", err);
+                printk("Fail: Couldn't create conn. Error: %d.\n", err);
                 start_scan(0);
             }
 
@@ -209,15 +205,13 @@ static void device_found(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
         return;
     }
 
-    /* We're only interested in connectable events */
     if (type != BT_GAP_ADV_TYPE_ADV_IND && type != BT_GAP_ADV_TYPE_ADV_DIRECT_IND) {
         return;
     }
 
     bt_addr_le_to_str(addr, addr_str, sizeof(addr_str));
-    printk("Device found: %s (RSSI %d)\n", addr_str, rssi);
+    printk("New device was found. Address: %s. RSSI: %d.\n", addr_str, rssi);
 
-    /* connect only to devices in close proximity */
     if (rssi < -70) {
         return;
     }
@@ -236,11 +230,11 @@ static void start_scan(int err)
     /* This demo doesn't require active scan */
     err = bt_le_scan_start(&scan_param, device_found);
     if (err) {
-        printk("Scanning failed to start (err %d)\n", err);
+        printk("Fail: Start Scan. Error: %d\n", err);
         return;
     }
 
-    printk("Scanning successfully started\n");
+    printk("Success: Scanning started\n");
 }
 
 static uint8_t notify(struct bt_conn *conn, struct bt_gatt_subscribe_params *params,
@@ -257,7 +251,7 @@ static uint8_t notify(struct bt_conn *conn, struct bt_gatt_subscribe_params *par
     memcpy(data, buf, length);
     data[length] = '\0';
 
-    printk("Notification Received data: %s. Length %u.\n", data, length);
+    printk("Success: Notification Received. Data: %s. Length: %u.\n", data, length);
 
     return BT_GATT_ITER_CONTINUE;
 }
@@ -269,12 +263,12 @@ static uint8_t discover_characteristics(struct bt_conn *conn,
     int err;
 
     if (!attr) {
-        printk(" Discover complete.\n");
+        printk("Success: Characteristics were discovered.\n");
         (void) memset(params, 0, sizeof(*params));
         return BT_GATT_ITER_STOP;
     }
 
-    printk(" Discover attribute handle: %u.\n", attr->handle);
+    printk("Attribute handle: %u.\n", attr->handle);
 
     /* Características do Serviço Bluetooth UART. */
     if (!bt_uuid_cmp(discover_params.uuid, BT_UART_SVC_UUID)) {
@@ -286,7 +280,7 @@ static uint8_t discover_characteristics(struct bt_conn *conn,
         /* Característica de notificação. */
         err = bt_gatt_discover(conn, &discover_params);
         if (err) {
-            printk("Discover failed (err %d).\n", err);
+            printk("Fail. Error: %d.\n", err);
         }
     } else if (!bt_uuid_cmp(discover_params.uuid, BT_UART_NOTIFY_CHAR_UUID)) {
         memcpy(&uuid_t, BT_UART_WRITE_CHAR_UUID, sizeof(uuid_t));
@@ -299,7 +293,7 @@ static uint8_t discover_characteristics(struct bt_conn *conn,
         err = bt_gatt_discover(conn, &discover_params);
 
         if (err) {
-            printk("Discover failed (err %d).\n", err);
+            printk("Fail. Error: %d.\n", err);
         }
     } else if (!bt_uuid_cmp(discover_params.uuid, BT_UART_WRITE_CHAR_UUID)) {
         memcpy(&uuid_t, BT_UUID_GATT_CCC, sizeof(uuid_t));
@@ -311,7 +305,7 @@ static uint8_t discover_characteristics(struct bt_conn *conn,
         /* Descritor do serviço . */
         err = bt_gatt_discover(conn, &discover_params);
         if (err) {
-            printk("Discover failed (err %d).\n", err);
+            printk("Fail. Error: %d.\n", err);
         }
     } else {
         subscribe_params.notify     = notify;
@@ -320,9 +314,9 @@ static uint8_t discover_characteristics(struct bt_conn *conn,
 
         err = bt_gatt_subscribe(conn, &subscribe_params);
         if (err && err != -EALREADY) {
-            printk("Subscribe failed (err %d).\n", err);
+            printk("Fail. Error: %d.\n", err);
         } else {
-            printk("Subscribed!\n");
+            printk("Success.\n");
         }
 
         return BT_GATT_ITER_STOP;
@@ -338,7 +332,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
     bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
     if (err) {
-        printk("Failed to connect to %s (%u)\n", addr, err);
+        printk("Fail: Couldn't connect. Error: %d %s (%u)\n", addr, err);
 
         bt_conn_unref(default_conn);
         default_conn = NULL;
@@ -349,7 +343,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
 
 
     if (conn == default_conn) {
-        printk("Connected: %s\n", addr);
+        printk("Success: Connected. %s\n", addr);
         memcpy(&uuid_t, BT_UART_SVC_UUID, sizeof(uuid_t));
         discover_params.uuid = &uuid_t.uuid;
         /* Serviços -> Características */
@@ -360,7 +354,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
 
         err = bt_gatt_discover(default_conn, &discover_params);
         if (err) {
-            printk("Discover failed(err %d).\n", err);
+            printk("Fail. Error: %d.\n", err);
             return;
         }
     }
@@ -376,7 +370,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 
     bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
-    printk("Disconnected: %s (reason 0x%02x)\n", addr, reason);
+    printk("Device %s disconnected. Reason: 0x%02x\n", addr, reason);
 
     bt_conn_unref(default_conn);
     default_conn = NULL;
@@ -394,25 +388,25 @@ static void input_task(void)
     while (true) {
         k_sleep(K_MSEC(200));
 
-        printk("|BLE CENTRAL| Enter a line:");
+        printk("Write the desired input: ");
         recvd_line = console_getline();
 
         if (recvd_line == NULL) {
-            printk("|BLE CENTRAL| Error receiving line!\n");
+            printk("Error receiving user input!\n");
             continue;
         }
 
-        printk("|BLE CENTRAL| Sending line:%s\n", recvd_line);
+        printk("Sending input: %s\n", recvd_line);
 
         if (default_conn == NULL) {
-            printk("Not connected!");
+            printk("No device connected. Try again.");
             return -1;
         }
 
         err = bt_gatt_write_without_response(default_conn, uart_write, recvd_line,
                                              strlen(recvd_line), false);
         if (err) {
-            printk("Write failed (err %d)\n", err);
+            printk("Fail: Couldn't write succesfullt. Error: %d\n", err);
         }
     }
 }
