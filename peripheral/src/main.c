@@ -66,7 +66,7 @@ static int write_uart(struct bt_conn *conn, const struct bt_gatt_attr *attr,
     memcpy(data, buf, len);
     data[len] = '\0';
 
-    printk("|BLE PERIPHERAL| Received data %s.\n", data);
+    printk("Received data %s.\n", data);
 
     /* Converte letras minúsculas para maiúsculas. */
     for (int i = 0; i < len; i++) {
@@ -75,12 +75,12 @@ static int write_uart(struct bt_conn *conn, const struct bt_gatt_attr *attr,
         }
     }
 
-    printk("|BLE PERIPHERAL| Sending data %s.\n", data);
+    printk("Sending data %s.\n", data);
 
     /* Notifica Central com o dados convertidos. */
     err = bt_gatt_notify(NULL, &bt_uart.attrs[1], data, len);
     if (err) {
-        printk("|BLE PERIPHERAL| Error notifying.\n");
+        printk("Error notifying.\n");
     }
 
     return 0;
@@ -119,7 +119,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
     /* Volta a realizar o adversiting. */
     err = bt_le_adv_start(BT_LE_ADV_CONN_NAME, ad, ARRAY_SIZE(ad), NULL, 0);
     if (err) {
-        printk("Advertising failed to start (err %d).\n", err);
+        printk("Fail: Advertising failed to start. Error: %d.\n", err);
     }
 }
 
@@ -136,18 +136,18 @@ void main(void)
     bt_gatt_cb_register(&gatt_cb);
     err = bt_enable(NULL);
     if (err) {
-        printk("Bluetooth init failed (err %d)\n", err);
+        printk("Fail: Bluetooth couldn't start. Error: %d\n", err);
         return 0;
     }
 
-    printk("Bluetooth initialized\n");
+    printk("Success: Bluetooth initialized\n");
 
     err = bt_le_adv_start(BT_LE_ADV_CONN_NAME, ad, ARRAY_SIZE(ad), NULL, 0);
     if (err) {
-        printk("Advertising failed to start (err %d).\n", err);
+        printk("Fail: Advertising failed to start. Error: %d.\n", err);
         return;
     }
 
-    printk("Started advertising.\n");
+    printk("Success: Started advertising.\n");
     return;
 }

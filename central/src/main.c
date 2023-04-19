@@ -160,7 +160,6 @@ static bool svc_found(struct bt_data *data, void *user_data)
 {
     bt_addr_le_t *addr = user_data;
     int i;
-
     printk("D: %u L: %u.\n", data->type, data->data_len);
 
     switch (data->type) {
@@ -216,12 +215,13 @@ static void device_found(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
     }
 
     bt_addr_le_to_str(addr, addr_str, sizeof(addr_str));
+
     printk("New device was found. Address: %s. RSSI: %d.\n", addr_str, rssi);
 
     if (rssi < -70) {
         return;
     }
-
+   
     bt_data_parse(ad, svc_found, (void *) addr);
 }
 
@@ -317,7 +317,7 @@ static uint8_t discover_characteristics(struct bt_conn *conn,
         subscribe_params.notify     = central_notify;
         subscribe_params.value      = BT_GATT_CCC_NOTIFY;
         subscribe_params.ccc_handle = attr->handle;
-
+        
         err = bt_gatt_subscribe(conn, &subscribe_params);
         if (err && err != -EALREADY) {
             printk("Fail. Error: %d.\n", err);
