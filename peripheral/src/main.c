@@ -4,6 +4,7 @@
 #include <bluetooth/hci.h>
 #include <bluetooth/uuid.h>
 #include <console/console.h>
+#include <ctype.h>
 #include <errno.h>
 #include <kernel.h>
 #include <peripheral.h>
@@ -36,28 +37,29 @@ static void change_notify(const struct bt_gatt_attr *attr, uint16_t value)
 static int write_uart(struct bt_conn *conn, const struct bt_gatt_attr *attr,
                       const void *buf, uint16_t len, uint16_t offset, uint8_t flags)
 {
-    int err = 0;
-    char data[len + 1];
+    if (!buf || !len) {
+        printk("Invalid parameter.\n");
+        return -EINVAL;
+    }
 
-    /* Copia dados recebidos. */
+    char data[len + 1];
     memcpy(data, buf, len);
     data[len] = '\0';
 
-    printk("Received data %s.\n", data);
+    printk("Received data: %s\n", data);
 
-    /* Converte letras minúsculas para maiúsculas. */
     for (int i = 0; i < len; i++) {
         if ((data[i] >= 'a') && ((data[i] <= 'z'))) {
-            data[i] = 'A' + (data[i] - 'a');
+            data[i] = toupper(data[i]);
         }
     }
 
-    printk("Sending data %s.\n", data);
+    printk("Converted data: %s\n", data);
 
-    /* Notifica Central com o dados convertidos. */
-    err = bt_gatt_notify(NULL, &bt_uart.attrs[1], data, len);
+    int err = bt_gatt_notify(NULL, &bt_uart.attrs[1], data, len);
     if (err) {
-        printk("Error notifying.\n");
+        printk("Error notifying: %d\n", err);
+        return err;
     }
 
     return 0;
@@ -65,46 +67,38 @@ static int write_uart(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 
 void mtu_updated(struct bt_conn *conn, uint16_t tx, uint16_t rx)
 {
-    printk("Updated MTU. TX:%d RX:%d bytes.\n", tx, rx);
+    printk("MTU was updated. Max Transmit Bytes (TX): %d\nMax Receive Bytes (RX):%d.\n", tx, rx);
 }
 
 static void connected(struct bt_conn *conn, uint8_t err)
 {
-    if(conn == default_conn){
-        return;
-    }
-    
-    if (err) {
-        printk("Peripheral Connection failed (err %u).\n", err);
-    } else {
-        default_conn = bt_conn_ref(conn);
-        printk("Connected.\n");
+    if (conn != default_conn) {
+        if (err) {
+            printk("Peripheral connection failed (err %u).\n", err);
+        } else {
+            default_conn = bt_conn_ref(conn);
+            printk("Peripheral connected.\n");
+        }
     }
 }
 
 static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
     int err = 0;
-    printk("Disconnected, reason %u.\n", reason);
+    printk("Disconnected. Reason: %u.\n", reason);
 
-    /* Decrementa conexão anterior do contador. */
     if (default_conn) {
         bt_conn_unref(default_conn);
         default_conn = NULL;
     }
 
-    /* Volta a realizar o adversiting. */
     err = bt_le_adv_start(BT_LE_ADV_CONN_NAME, ad, ARRAY_SIZE(ad), NULL, 0);
     if (err) {
-        printk("Fail: Advertising failed to start. Error: %d.\n", err);
+        printk("Failed to start advertising. Error: %d.\n", err);
+    } else {
+        printk("Advertising restarted.\n");
     }
 }
-
-BT_CONN_CB_DEFINE(conn_callbacks) = {
-    .connected    = connected,
-    .disconnected = disconnected,
-};
-
 
 void main(void)
 {

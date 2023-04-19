@@ -2,6 +2,7 @@
     "files.associations": {
         "zephyr.h": "c",
         "byteorder.h": "c",
-        "peripheral.h": "c"
+        "peripheral.h": "c",
+        "stddef.h": "c"
     }
 }
