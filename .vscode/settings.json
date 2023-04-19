@@ -1,0 +1,9 @@
+{
+    "files.associations": {
+        "kernel.h": "c",
+        "version.h": "c",
+        "central.h": "c",
+        "string.h": "c",
+        "stdlib.h": "c"
+    }
+}

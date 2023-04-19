@@ -2,9 +2,9 @@
 
 using sysbus
 
-$central_bin?=@../SistemasEmbarcados/Ecouart/Central/.pio/build/nrf52840_dk/firmware.elf
+# $central_bin?=@../SistemasEmbarcados/Ecouart/Central/.pio/build/nrf52840_dk/firmware.elf
 
-# $central_bin?=@central/.pio/build/nrf52840_dk/firmware.elf
+$central_bin?=@central/.pio/build/nrf52840_dk/firmware.elf
 $peripheral_bin?=@peripheral/.pio/build/nrf52840_dk/firmware.elf
 
 emulation CreateBLEMedium "wireless"
